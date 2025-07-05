@@ -1,0 +1,115 @@
+[Dockerfile]
+
+FROM ruby:3.2.3
+
+# Install dependencies
+RUN apt-get update -qq && apt-get install -y nodejs postgresql-client
+
+# Set working directory
+WORKDIR /app
+
+# Copy Gemfiles
+COPY Gemfile Gemfile.lock ./
+
+# Install gems
+RUN bundle install
+
+# Copy rest of the app
+COPY . .
+
+# Precompile assets (optional for API-only apps)
+# RUN bundle exec rake assets:precompile
+
+# Start the serverCMD
+CMD ["bash", "-c", "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p 8000"]
+
+
+[docker-compose.yml]
+version: "3.8"
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+
+  web:
+    build: .
+    command: bash -c "rm -f tmp/pids/server.pid && bundle exec rails server -b 0.0.0.0 -p 8000"
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      DATABASE_HOST: db
+      DATABASE_USERNAME: postgres
+      DATABASE_PASSWORD: password
+
+[Gemfile]
+group :development, :test do
+  # See https://guides.rubyonrails.org/debugging_rails_applications.html#debugging-with-the-debug-gem
+  gem 'database_cleaner'
+  gem 'debug', platforms: %i[mri mingw x64_mingw]
+  # gem 'rails-controller-testing'
+  gem 'rspec-rails'
+end
+
+group :development do
+  # Use console on exceptions pages [https://github.com/rails/web-console]
+  gem 'web-console'
+
+  # Add speed badges [https://github.com/MiniProfiler/rack-mini-profiler]
+  # gem "rack-mini-profiler"
+
+  # Speed up commands on slow machines / big apps [https://github.com/rails/spring]
+  # gem "spring"
+end
+
+group :test do
+  # Use system testing [https://guides.rubyonrails.org/testing.html#system-testing]
+  gem 'capybara'
+  gem 'selenium-webdriver'
+  gem 'webdrivers'
+end
+
+[config/database.yml]
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  pool: 5
+  username: <%= ENV["DATABASE_USERNAME"] || "postgres" %>
+  password: <%= ENV["DATABASE_PASSWORD"] || "password" %>
+  host: <%= ENV["DATABASE_HOST"] || "localhost" %>
+
+development:
+  <<: *default
+  database: budget_app_development
+
+test:
+  <<: *default
+  database: budget_app_test
+
+production:
+  <<: *default
+  database: budget_app_production
+
+[config/application.rb]
+# config/application.rb
+require_relative 'boot'
+
+require 'logger'      # 👈 Safe to have here as well
+require 'rails/all'   # Load all of Rails
+
+# Require the gems listed in Gemfile, including any gems
+# you've limited to :test, :development, or :production.
+Bundler.require(*Rails.groups)
+
+module YourAppName
+  class Application < Rails::Application
+    # Configuration here
+  end
+end
